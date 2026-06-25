@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+src-tauri/target/
+
+# Skills (external, installed per-machine)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Local Claude config
+.claude/settings.local.json
+.claude/plans/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
