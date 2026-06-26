@@ -5,9 +5,9 @@ mod vdf;
 use config::AppConfig;
 use std::sync::Mutex;
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
-    tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager,
+    menu::{Menu, MenuItem},
+    tray::{TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, WindowEvent,
 };
 
 struct AppState {
@@ -57,40 +57,17 @@ async fn launch_server(
 }
 
 #[tauri::command]
-async fn cleanup_options(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
-    let steam_path = steam::get_steam_path().map_err(|e| e.to_string())?;
-    let (localconfig, _steamid64, _user_name) =
-        steam::get_localconfig_path(&steam_path).map_err(|e| e.to_string())?;
-    let stored = vdf::read_launch_options(&localconfig).unwrap_or_default();
-
-    if stored.is_empty() {
-        return Ok("启动选项已为空，无需清理".to_string());
-    }
-
-    let _ = app.emit("status", "正在关闭 Steam…");
-    if steam::is_steam_running() {
-        steam::shutdown_steam_graceful(&steam_path, 25).map_err(|e| e.to_string())?;
-    }
-
-    vdf::clear_launch_options(&localconfig).map_err(|e| e.to_string())?;
-
-    {
-        let mut cfg = state.config.lock().unwrap();
-        cfg.cleaned = true;
-        config::save(&cfg).map_err(|e| e.to_string())?;
-    }
-
-    Ok("启动选项已清理".to_string())
-}
-
-#[tauri::command]
 fn set_extra_args(state: tauri::State<AppState>, args: Vec<String>) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap();
     cfg.extra_args = args;
     config::save(&cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_avatar_path() -> Result<String, String> {
+    let steam_path = steam::get_steam_path().map_err(|e| e.to_string())?;
+    steam::get_avatar_base64(&steam_path)
+        .ok_or_else(|| "未找到头像".to_string())
 }
 
 #[tauri::command]
@@ -165,48 +142,41 @@ pub fn run() {
             config: Mutex::new(initial_config),
         })
         .setup(|app| {
-            // 构建托盘菜单
-            let launch_cn =
-                MenuItem::with_id(app, "launch_cn", "🇨🇳  启动国服", true, None::<&str>)?;
-            let launch_global =
-                MenuItem::with_id(app, "launch_global", "🌍  启动全球服", true, None::<&str>)?;
-            let sep1 = PredefinedMenuItem::separator(app)?;
-            let settings = MenuItem::with_id(app, "settings", "⚙️  设置…", true, None::<&str>)?;
-            let sep2 = PredefinedMenuItem::separator(app)?;
-            let quit = MenuItem::with_id(app, "quit", "🚪  退出", true, None::<&str>)?;
+            // 拦截设置窗口关闭：隐藏而非退出（必须先于托盘创建注册）
+            if let Some(w) = app.get_webview_window("settings") {
+                let handle = app.handle().clone();
+                w.on_window_event(move |e| {
+                    if let WindowEvent::CloseRequested { api, .. } = e {
+                        api.prevent_close();
+                        let _ = handle.get_webview_window("settings").map(|w| w.hide());
+                    }
+                });
+            }
 
-            let menu = Menu::with_items(app, &[&launch_cn, &launch_global, &sep1, &settings, &sep2, &quit])?;
+            // 构建托盘菜单
+            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&quit])?;
 
             // 托盘图标（使用应用默认图标）
-            let mut tray = TrayIconBuilder::new().menu(&menu).tooltip("Dota2 切换器");
+            let mut tray = TrayIconBuilder::new().menu(&menu).tooltip("D2Copilot");
             if let Some(icon) = app.default_window_icon() {
                 tray = tray.icon(icon.clone());
             }
             tray.on_menu_event(|app, event| match event.id.as_ref() {
-                "launch_cn" => {
-                    let app = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let state: tauri::State<AppState> = app.state();
-                        let _ = do_launch(&app, &state, "cn").await;
-                    });
-                }
-                "launch_global" => {
-                    let app = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let state: tauri::State<AppState> = app.state();
-                        let _ = do_launch(&app, &state, "global").await;
-                    });
-                }
-                "settings" => {
-                    if let Some(w) = app.get_webview_window("settings") {
+                "quit" => app.exit(0),
+                _ => {}
+            })
+            .on_tray_icon_event(|tray, event| {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left, ..
+                } = event
+                {
+                    let handle = tray.app_handle().clone();
+                    let _ = handle.get_webview_window("settings").map(|w| {
                         let _ = w.show();
                         let _ = w.set_focus();
-                    }
+                    });
                 }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             })
             .build(app)?;
 
@@ -215,8 +185,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_status,
             launch_server,
-            cleanup_options,
             set_extra_args,
+            get_avatar_path,
             open_settings_window,
         ])
         .run(tauri::generate_context!())

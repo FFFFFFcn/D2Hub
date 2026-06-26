@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    dota2switch_lib::run()
+    d2copilot_lib::run()
 }

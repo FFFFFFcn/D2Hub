@@ -3,6 +3,24 @@
 version = 4
 
 [[package]]
+name = "D2Copilot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "keyvalues-parser",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "winreg",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -781,24 +799,6 @@ dependencies = [
  "precomputed-hash",
  "selectors",
  "tendril",
-]
-
-[[package]]
-name = "dota2switch"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs",
- "keyvalues-parser",
- "once_cell",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "winreg",
 ]
 
 [[package]]

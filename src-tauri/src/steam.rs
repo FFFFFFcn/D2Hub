@@ -213,6 +213,47 @@ pub fn shutdown_steam_graceful(steam_path: &PathBuf, timeout_secs: u64) -> Resul
     }
 }
 
+/// 获取当前活跃用户的 Steam 头像路径
+pub fn get_avatar_path(steam_path: &PathBuf) -> Option<PathBuf> {
+    if let Ok((_, steamid64, _)) = get_localconfig_path(steam_path) {
+        let avatar = steam_path
+            .join("config")
+            .join("avatarcache")
+            .join(format!("{}.png", steamid64));
+        if avatar.exists() {
+            return Some(avatar);
+        }
+    }
+    None
+}
+
+/// 获取头像 base64 (data URL)
+pub fn get_avatar_base64(steam_path: &PathBuf) -> Option<String> {
+    let path = get_avatar_path(steam_path)?;
+    let bytes = std::fs::read(&path).ok()?;
+    Some(format!(
+        "data:image/png;base64,{}",
+        base64_encode(&bytes)
+    ))
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(CHARS[((n >> 18) & 63) as usize] as char);
+        out.push(CHARS[((n >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 { out.push(CHARS[((n >> 6) & 63) as usize] as char); } else { out.push('='); }
+        if chunk.len() > 2 { out.push(CHARS[(n & 63) as usize] as char); } else { out.push('='); }
+    }
+    out
+}
+
 /// 启动 Dota 2: steam.exe -applaunch 570 [args]
 pub fn launch_dota2(steam_path: &PathBuf, args: &[String]) -> Result<()> {
     let steam_exe = steam_path.join("steam.exe");

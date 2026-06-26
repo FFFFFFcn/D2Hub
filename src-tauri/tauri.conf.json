@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Dota2 Switcher",
+  "productName": "D2Copilot",
   "version": "0.1.0",
-  "identifier": "com.dota2switcher.app",
+  "identifier": "com.d2copilot.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,10 +13,11 @@
     "windows": [
       {
         "label": "settings",
-        "title": "Dota2 切换器 - 设置",
-        "width": 520,
-        "height": 480,
-        "resizable": true,
+        "title": "D2Copilot",
+        "width": 320,
+        "height": 420,
+        "resizable": false,
+        "maximizable": false,
         "fullscreen": false,
         "visible": false,
         "center": true

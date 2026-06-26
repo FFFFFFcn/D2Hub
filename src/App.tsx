@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface StatusInfo {
   steam_path: string;
@@ -14,232 +15,137 @@ interface StatusInfo {
   steam_running: boolean;
 }
 
-const EXTRA_OPTIONS = [
-  { value: "-novid", label: "novid" },
-  { value: "-console", label: "console" },
-  { value: "-language schinese", label: "schinese" },
-  { value: "-high", label: "high" },
+const SWITCHES = [
+  { value: "-novid", label: "跳过开场动画", code: "-novid" },
+  { value: "-high", label: "高优先级启动", code: "-high" },
 ];
-
-function LoadingSkeleton() {
-  return (
-    <>
-      <div className="status-grid">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div className="status-card" key={i}>
-            <div className="skeleton-block short" />
-            <div className="skeleton-block med" />
-          </div>
-        ))}
-      </div>
-      <div className="launch-group">
-        <div className="launch-btn" style={{ opacity: 0.3 }}>
-          <span className="icon">&#8203;</span>
-          <span className="sub">loading</span>
-        </div>
-        <div className="launch-btn" style={{ opacity: 0.3 }}>
-          <span className="icon">&#8203;</span>
-          <span className="sub">loading</span>
-        </div>
-      </div>
-    </>
-  );
-}
 
 function App() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
-  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(""), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
   const [loading, setLoading] = useState(false);
-  const [extraArgs, setExtraArgs] = useState<string[]>([]);
+  const [server, setServer] = useState("cn");
+  const [args, setArgs] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [avatarSrc, setAvatarSrc] = useState("");
 
-  const refreshStatus = async () => {
+  const refresh = async () => {
     try {
       const s = await invoke<StatusInfo>("get_status");
       setStatus(s);
-      setExtraArgs(s.extra_args);
-    } catch (e) {
-      setMessage(`获取状态失败: ${e}`);
-    }
+      setServer(s.last_server || "cn");
+      setArgs(s.extra_args || []);
+      try {
+        const b64 = await invoke<string>("get_avatar_path");
+        setAvatarSrc(b64);
+      } catch { setAvatarSrc(""); }
+    } catch (e) { setToast(`获取状态失败: ${e}`); }
   };
 
   useEffect(() => {
-    refreshStatus();
-    const unlisten = listen<string>("status", (event) => {
-      setMessage(event.payload);
-    });
+    refresh();
+    const u1 = listen<string>("status", (e) => setToast(e.payload));
     const win = getCurrentWindow();
-    const unlistenClose = win.onCloseRequested(async (e) => {
-      e.preventDefault();
-      await win.hide();
-    });
-    return () => {
-      unlisten.then((f) => f());
-      unlistenClose.then((f) => f());
-    };
+    const u2 = win.onCloseRequested(async (e) => { e.preventDefault(); await win.hide(); });
+    const u3 = win.listen("tauri://focus", () => { refresh(); });
+    return () => { u1.then(f => f()); u2.then(f => f()); u3.then(f => f()); };
   }, []);
 
-  const handleLaunch = async (server: string) => {
+  const handleLaunch = async () => {
     setLoading(true);
-    setMessage(`正在启动${server === "cn" ? "国服" : "全球服"}…`);
-    try {
-      const result = await invoke<string>("launch_server", { server });
-      setMessage(result);
-    } catch (e) {
-      setMessage(`启动失败: ${e}`);
-    }
+    setToast("正在启动...");
+    try { setToast(await invoke<string>("launch_server", { server })); }
+    catch (e) { setToast(`启动失败: ${e}`); }
     setLoading(false);
-    refreshStatus();
+    openUrl("https://metadota2.com/zh-cn");
+    refresh();
   };
 
-  const handleCleanup = async () => {
-    setLoading(true);
-    setMessage("正在清理启动选项…");
-    try {
-      const result = await invoke<string>("cleanup_options");
-      setMessage(result);
-    } catch (e) {
-      setMessage(`清理失败: ${e}`);
-    }
-    setLoading(false);
-    refreshStatus();
+  const toggleArg = async (arg: string) => {
+    const next = args.includes(arg) ? args.filter(a => a !== arg) : [...args, arg];
+    setArgs(next);
+    try { await invoke("set_extra_args", { args: next }); }
+    catch (e) { setToast(`保存失败: ${e}`); }
   };
-
-  const toggleExtraArg = async (arg: string) => {
-    const next = extraArgs.includes(arg)
-      ? extraArgs.filter((a) => a !== arg)
-      : [...extraArgs, arg];
-    setExtraArgs(next);
-    try {
-      await invoke("set_extra_args", { args: next });
-    } catch (e) {
-      setMessage(`保存参数失败: ${e}`);
-    }
-  };
-
-  const storedIsCN = status?.stored_launch_options?.includes("-perfectworld");
-  const lastIsCN = status?.last_server === "cn";
-  const storedLabel = status?.stored_launch_options
-    ? storedIsCN
-      ? "CN "
-      : status.stored_launch_options.length > 0
-        ? status.stored_launch_options
-        : ""
-    : "";
 
   return (
     <div className="container">
-      <h1>Dota2 Switcher</h1>
-
-      {message && <div className="message">{message}</div>}
-
-      {!status ? (
-        <LoadingSkeleton />
-      ) : (
-        <>
-          {/* ─── Status Grid ─── */}
-          <h2>Status</h2>
-          <div className="status-grid">
-            <div className="status-card span-2">
-              <span className="label">Account</span>
-              <span className="value">
-                {status.active_user_name}{" "}
-                <code>{status.active_user_id}</code>
-              </span>
-            </div>
-            <div className="status-card">
-              <span className="label">Steam</span>
-              <span className="value">
-                <span className="indicator">
-                  <span
-                    className={`indicator-dot ${status.steam_running ? "online" : "offline"}`}
-                  />
-                  {status.steam_running ? "Online" : "Offline"}
-                </span>
-              </span>
-            </div>
-            <div className="status-card">
-              <span className="label">Last Launch</span>
-              <span className="value">
-                <span className="indicator">
-                  <span
-                    className={`indicator-dot ${lastIsCN ? "cn" : "global"}`}
-                  />
-                  {lastIsCN ? "CN " : "Global"}
-                </span>
-              </span>
-            </div>
-            <div className="status-card">
-              <span className="label">Stored Option</span>
-              <span className="value">
-                {storedLabel || (
-                  <span style={{ color: "var(--text-dim)" }}>empty</span>
-                )}
-              </span>
-            </div>
-            <div className="status-card">
-              <span className="label">Cleaned</span>
-              <span className="value">{status.cleaned ? "Done" : "Pending"}</span>
-            </div>
+      {/* Account */}
+      {status && (
+        <div className="account-line">
+          <div className="account-avatar">
+            {avatarSrc ? <img src={avatarSrc} alt="" style={{width:"100%",height:"100%",borderRadius:"7px",objectFit:"cover"}} /> : "D2"}
           </div>
-
-          {/* ─── Launch ─── */}
-          <h2>Launch</h2>
-          <div className="launch-group">
-            <button
-              className="launch-btn cn"
-              onClick={() => handleLaunch("cn")}
-              disabled={loading}
-            >
-              <span className="icon"></span>
-              Perfect World
-              <span className="sub">dota2 &mdash; cn server</span>
-            </button>
-            <button
-              className="launch-btn global"
-              onClick={() => handleLaunch("global")}
-              disabled={loading}
-            >
-              <span className="icon"></span>
-              Global
-              <span className="sub">dota2 &mdash; international</span>
-            </button>
+          <div className="account-text">
+            <div className="account-name">{status.active_user_name}</div>
+            <div className="account-id">{status.active_user_id}</div>
           </div>
-
-          {/* ─── Extra Args ─── */}
-          <h2>Extra Args</h2>
-          <div className="args-section">
-            {EXTRA_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`arg-chip ${extraArgs.includes(opt.value) ? "checked" : ""}`}
-                onClick={() => toggleExtraArg(opt.value)}
-              >
-                <span className="chip-dot" />
-                {opt.label}
-              </label>
-            ))}
-          </div>
-
-          {/* ─── Maintenance ─── */}
-          <h2>Maintenance</h2>
-          <div className="maintenance-card">
-            <div className="maintenance-info">
-              <p className="title">Reset Steam Launch Options</p>
-              <p className="desc">
-                Clear the stored -perfectworld flag from Steam's config file.
-                Required once after first setup.
-              </p>
-            </div>
-            <button
-              className="btn-sm warn"
-              onClick={handleCleanup}
-              disabled={loading}
-            >
-              Clean
-            </button>
-          </div>
-        </>
+        </div>
       )}
+
+      {/* Server Select */}
+      <div style={{position:"relative"}}>
+        <div className="section-label">服务器</div>
+        <div className={`select-wrap ${dropdownOpen ? "open" : ""}`} onClick={() => setDropdownOpen(!dropdownOpen)}>
+          <div className="select-trigger">
+            {server === "cn" ? "国服" : "全球服"}
+            <span className="select-sub">{server === "cn" ? "Perfect World" : "International"}</span>
+          </div>
+          <span className="select-arrow" />
+        </div>
+        {dropdownOpen && (
+          <div className="dropdown-menu">
+            <div className={`dropdown-item ${server === "cn" ? "active" : ""}`} onClick={() => { setServer("cn"); setDropdownOpen(false); }}>
+              <span className="dd-title">国服</span>
+              <span className="dd-sub">Perfect World</span>
+            </div>
+            <div className={`dropdown-item ${server === "global" ? "active" : ""}`} onClick={() => { setServer("global"); setDropdownOpen(false); }}>
+              <span className="dd-title">全球服</span>
+              <span className="dd-sub">International</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Switches */}
+      <div>
+        <div className="section-label">启动参数</div>
+        <div className="switch-group">
+          {SWITCHES.map(sw => (
+            <label key={sw.value} className="switch-row">
+              <span className="switch-label">
+                {sw.label}
+                <span className="arg-code">{sw.code}</span>
+              </span>
+              <span className="toggle">
+                <input
+                  type="checkbox"
+                  checked={args.includes(sw.value)}
+                  onChange={() => toggleArg(sw.value)}
+                />
+                <span className="toggle-track" />
+                <span className="toggle-thumb" />
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Launch Button */}
+      <div className="launch-area">
+        <button className="launch-btn" onClick={handleLaunch} disabled={loading || !status}>
+          {loading ? "启动中..." : "启动 DOTA 2"}
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
