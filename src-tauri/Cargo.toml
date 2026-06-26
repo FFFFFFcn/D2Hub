@@ -1,6 +1,6 @@
 [package]
 name = "D2Copilot"
-version = "0.1.0"
+version = "1.0.1"
 description = "Dota2 国服/全球服一键切换托盘工具"
 authors = ["you"]
 edition = "2021"

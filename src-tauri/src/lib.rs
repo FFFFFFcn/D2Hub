@@ -180,6 +180,12 @@ pub fn run() {
             })
             .build(app)?;
 
+            // 启动时弹出主界面
+            if let Some(w) = app.get_webview_window("settings") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
