@@ -15,11 +15,36 @@ interface StatusInfo {
 }
 
 const EXTRA_OPTIONS = [
-  { value: "-novid", label: "跳过开场动画 (-novid)" },
-  { value: "-console", label: "开发者控制台 (-console)" },
-  { value: "-language schinese", label: "简体中文 (-language schinese)" },
-  { value: "-high", label: "高 CPU 优先级 (-high)" },
+  { value: "-novid", label: "novid" },
+  { value: "-console", label: "console" },
+  { value: "-language schinese", label: "schinese" },
+  { value: "-high", label: "high" },
 ];
+
+function LoadingSkeleton() {
+  return (
+    <>
+      <div className="status-grid">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div className="status-card" key={i}>
+            <div className="skeleton-block short" />
+            <div className="skeleton-block med" />
+          </div>
+        ))}
+      </div>
+      <div className="launch-group">
+        <div className="launch-btn" style={{ opacity: 0.3 }}>
+          <span className="icon">&#8203;</span>
+          <span className="sub">loading</span>
+        </div>
+        <div className="launch-btn" style={{ opacity: 0.3 }}>
+          <span className="icon">&#8203;</span>
+          <span className="sub">loading</span>
+        </div>
+      </div>
+    </>
+  );
+}
 
 function App() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
@@ -42,14 +67,11 @@ function App() {
     const unlisten = listen<string>("status", (event) => {
       setMessage(event.payload);
     });
-
-    // 拦截关闭事件：关设置窗口 = 隐藏，不退出程序
     const win = getCurrentWindow();
     const unlistenClose = win.onCloseRequested(async (e) => {
       e.preventDefault();
       await win.hide();
     });
-
     return () => {
       unlisten.then((f) => f());
       unlistenClose.then((f) => f());
@@ -94,101 +116,130 @@ function App() {
     }
   };
 
-  const serverLabel = status?.stored_launch_options?.includes("-perfectworld")
-    ? "国服（Steam 已存 -perfectworld）"
-    : status?.stored_launch_options
-      ? `自定义: ${status.stored_launch_options}`
-      : "全球服（Steam 启动选项为空）";
+  const storedIsCN = status?.stored_launch_options?.includes("-perfectworld");
+  const lastIsCN = status?.last_server === "cn";
+  const storedLabel = status?.stored_launch_options
+    ? storedIsCN
+      ? "CN "
+      : status.stored_launch_options.length > 0
+        ? status.stored_launch_options
+        : ""
+    : "";
 
   return (
     <div className="container">
-      <h1>🎮 Dota2 切换器 - 设置</h1>
+      <h1>Dota2 Switcher</h1>
 
-      {message && (
-        <div className="message">
-          {message}
-        </div>
+      {message && <div className="message">{message}</div>}
+
+      {!status ? (
+        <LoadingSkeleton />
+      ) : (
+        <>
+          {/* ─── Status Grid ─── */}
+          <h2>Status</h2>
+          <div className="status-grid">
+            <div className="status-card span-2">
+              <span className="label">Account</span>
+              <span className="value">
+                {status.active_user_name}{" "}
+                <code>{status.active_user_id}</code>
+              </span>
+            </div>
+            <div className="status-card">
+              <span className="label">Steam</span>
+              <span className="value">
+                <span className="indicator">
+                  <span
+                    className={`indicator-dot ${status.steam_running ? "online" : "offline"}`}
+                  />
+                  {status.steam_running ? "Online" : "Offline"}
+                </span>
+              </span>
+            </div>
+            <div className="status-card">
+              <span className="label">Last Launch</span>
+              <span className="value">
+                <span className="indicator">
+                  <span
+                    className={`indicator-dot ${lastIsCN ? "cn" : "global"}`}
+                  />
+                  {lastIsCN ? "CN " : "Global"}
+                </span>
+              </span>
+            </div>
+            <div className="status-card">
+              <span className="label">Stored Option</span>
+              <span className="value">
+                {storedLabel || (
+                  <span style={{ color: "var(--text-dim)" }}>empty</span>
+                )}
+              </span>
+            </div>
+            <div className="status-card">
+              <span className="label">Cleaned</span>
+              <span className="value">{status.cleaned ? "Done" : "Pending"}</span>
+            </div>
+          </div>
+
+          {/* ─── Launch ─── */}
+          <h2>Launch</h2>
+          <div className="launch-group">
+            <button
+              className="launch-btn cn"
+              onClick={() => handleLaunch("cn")}
+              disabled={loading}
+            >
+              <span className="icon"></span>
+              Perfect World
+              <span className="sub">dota2 &mdash; cn server</span>
+            </button>
+            <button
+              className="launch-btn global"
+              onClick={() => handleLaunch("global")}
+              disabled={loading}
+            >
+              <span className="icon"></span>
+              Global
+              <span className="sub">dota2 &mdash; international</span>
+            </button>
+          </div>
+
+          {/* ─── Extra Args ─── */}
+          <h2>Extra Args</h2>
+          <div className="args-section">
+            {EXTRA_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className={`arg-chip ${extraArgs.includes(opt.value) ? "checked" : ""}`}
+                onClick={() => toggleExtraArg(opt.value)}
+              >
+                <span className="chip-dot" />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+
+          {/* ─── Maintenance ─── */}
+          <h2>Maintenance</h2>
+          <div className="maintenance-card">
+            <div className="maintenance-info">
+              <p className="title">Reset Steam Launch Options</p>
+              <p className="desc">
+                Clear the stored -perfectworld flag from Steam's config file.
+                Required once after first setup.
+              </p>
+            </div>
+            <button
+              className="btn-sm warn"
+              onClick={handleCleanup}
+              disabled={loading}
+            >
+              Clean
+            </button>
+          </div>
+        </>
       )}
-
-      <div className="section">
-        <h2>状态</h2>
-        {status ? (
-          <table className="status-table">
-            <tbody>
-              <tr>
-                <td>Steam 路径</td>
-                <td><code>{status.steam_path}</code></td>
-              </tr>
-              <tr>
-                <td>活跃账号</td>
-                <td>{status.active_user_name} <code>({status.active_user_id})</code></td>
-              </tr>
-              <tr>
-                <td>Steam 启动选项</td>
-                <td><strong>{serverLabel}</strong></td>
-              </tr>
-              <tr>
-                <td>上次启动</td>
-                <td>{status.last_server === "cn" ? "🇨🇳 国服" : "🌍 全球服"}</td>
-              </tr>
-              <tr>
-                <td>已清理</td>
-                <td>{status.cleaned ? "✅ 是" : "❌ 否"}</td>
-              </tr>
-              <tr>
-                <td>Steam 状态</td>
-                <td>{status.steam_running ? "🟢 运行中" : "⚪ 未运行"}</td>
-              </tr>
-            </tbody>
-          </table>
-        ) : (
-          <p>加载中…</p>
-        )}
-      </div>
-
-      <div className="section">
-        <h2>快速启动</h2>
-        <div className="btn-group">
-          <button
-            className="btn btn-cn"
-            onClick={() => handleLaunch("cn")}
-            disabled={loading}
-          >
-            🇨🇳 启动国服
-          </button>
-          <button
-            className="btn btn-global"
-            onClick={() => handleLaunch("global")}
-            disabled={loading}
-          >
-            🌍 启动全球服
-          </button>
-        </div>
-      </div>
-
-      <div className="section">
-        <h2>额外启动参数</h2>
-        {EXTRA_OPTIONS.map((opt) => (
-          <label key={opt.value} className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={extraArgs.includes(opt.value)}
-              onChange={() => toggleExtraArg(opt.value)}
-            />
-            {opt.label}
-          </label>
-        ))}
-      </div>
-
-      <div className="section">
-        <h2>维护</h2>
-        <button className="btn btn-warn" onClick={handleCleanup} disabled={loading}>
-          🧹 重新清理 Steam 启动选项
-        </button>
-        <p className="hint">
-          如果手动在 Steam 里重新添加了 -perfectworld，点此清理。
-        </p>
-      </div>
     </div>
   );
 }
