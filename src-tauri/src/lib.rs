@@ -138,6 +138,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // 第二个实例启动时，聚焦已有窗口
+            if let Some(w) = app.get_webview_window("settings") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .manage(AppState {
             config: Mutex::new(initial_config),
         })

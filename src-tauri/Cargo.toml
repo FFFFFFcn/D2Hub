@@ -1,6 +1,6 @@
 [package]
 name = "D2Copilot"
-version = "1.0.1"
+version = "1.0.2"
 description = "Dota2 国服/全球服一键切换托盘工具"
 authors = ["you"]
 edition = "2021"
@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
