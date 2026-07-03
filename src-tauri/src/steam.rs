@@ -254,6 +254,32 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// 关闭指定进程（按 exe 文件名匹配，不要求完整路径）
+/// 返回 (尝试数, 成功数)
+pub fn kill_process_by_name(name: &str) -> (usize, usize) {
+    let mut sys = System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let target = name.to_lowercase();
+    let mut found = 0;
+    let mut killed = 0;
+    for proc in sys.processes().values() {
+        if let Some(exe) = proc.exe().and_then(|e| e.to_str()) {
+            let exe_lower = exe.to_lowercase().replace('/', "\\");
+            let file_name = std::path::Path::new(&exe_lower)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if file_name == target {
+                found += 1;
+                if proc.kill() {
+                    killed += 1;
+                }
+            }
+        }
+    }
+    (found, killed)
+}
+
 /// 启动 Dota 2: steam.exe -applaunch 570 [args]
 pub fn launch_dota2(steam_path: &PathBuf, args: &[String]) -> Result<()> {
     let steam_exe = steam_path.join("steam.exe");

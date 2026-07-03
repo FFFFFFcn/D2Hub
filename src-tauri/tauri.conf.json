@@ -15,7 +15,7 @@
         "label": "settings",
         "title": "D2Copilot",
         "width": 320,
-        "height": 420,
+        "height": 520,
         "resizable": false,
         "maximizable": false,
         "fullscreen": false,

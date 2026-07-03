@@ -142,6 +142,20 @@ function App() {
         <button className="launch-btn" onClick={handleLaunch} disabled={loading || !status}>
           {loading ? "启动中..." : "启动 DOTA 2"}
         </button>
+        <button
+          style={{
+            width:"100%",padding:"10px",marginTop:8,border:"1px solid #333",
+            borderRadius:12,background:"#1a1a1a",color:"#666",
+            fontFamily:"var(--font)",fontSize:"0.8rem",fontWeight:500,
+            cursor:"pointer"
+          }}
+          onClick={async () => {
+            try { setToast(await invoke<string>("kill_all_processes")); }
+            catch (e) { setToast(`操作失败: ${e}`); }
+          }}
+        >
+          收队
+        </button>
       </div>
 
       {/* Toast */}

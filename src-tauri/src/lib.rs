@@ -71,6 +71,23 @@ fn get_avatar_path() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn kill_all_processes() -> Result<String, String> {
+    let targets = ["dota2.exe", "steam.exe"];
+    let mut results = Vec::new();
+    for name in &targets {
+        let (_, killed) = steam::kill_process_by_name(name);
+        if killed > 0 {
+            results.push(name.to_string());
+        }
+    }
+    if results.is_empty() {
+        Ok("Dota 2 和 Steam 未在运行".to_string())
+    } else {
+        Ok(format!("已关闭: {}", results.join(", ")))
+    }
+}
+
+#[tauri::command]
 fn open_settings_window(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("settings") {
         w.show().map_err(|e| e.to_string())?;
@@ -200,6 +217,7 @@ pub fn run() {
             launch_server,
             set_extra_args,
             get_avatar_path,
+            kill_all_processes,
             open_settings_window,
         ])
         .run(tauri::generate_context!())

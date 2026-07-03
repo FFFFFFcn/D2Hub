@@ -269,7 +269,6 @@ body {
 }
 .launch-btn:hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 30px rgba(252,227,0,0.3);
 }
 .launch-btn:active { transform: scale(0.985); }
 .launch-btn:disabled {
