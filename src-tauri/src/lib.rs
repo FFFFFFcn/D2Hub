@@ -103,6 +103,12 @@ async fn do_launch(
     state: &AppState,
     server: &str,
 ) -> Result<String, String> {
+    // Dota 2 运行时无法切换服务器（-perfectworld 不会生效），先让用户退出游戏，
+    // 同时避免白白关掉 Steam、清空启动项。
+    if steam::is_dota_running() {
+        return Err("请先退出 Dota 2 再切换服务器".to_string());
+    }
+
     let steam_path = steam::get_steam_path().map_err(|e| e.to_string())?;
     let (localconfig, _steamid64, _user_name) =
         steam::get_localconfig_path(&steam_path).map_err(|e| e.to_string())?;

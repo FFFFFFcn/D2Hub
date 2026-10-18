@@ -156,37 +156,44 @@ fn get_user_name(steam_path: &PathBuf, steamid64: u64) -> String {
     steamid64.to_string()
 }
 
-fn normalize_path(path: &str) -> String {
-    path.replace('/', "\\")
-        .trim_end_matches('\\')
-        .to_lowercase()
+/// 进程的可执行文件名是否与给定名称一致（不区分大小写，不要求完整路径）
+fn exe_matches(exe: Option<&std::path::Path>, name: &str) -> bool {
+    exe.and_then(|e| e.file_name())
+        .and_then(|f| f.to_str())
+        .map(|f| f.eq_ignore_ascii_case(name))
+        .unwrap_or(false)
 }
 
-/// steam.exe 是否在运行
-pub fn is_steam_running() -> bool {
-    let mut sys = System::new();
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    sys.processes().values().any(|p| {
-        p.exe()
-            .and_then(|e| e.to_str())
-            .map(|e| normalize_path(e).ends_with("steam.exe"))
-            .unwrap_or(false)
-    })
-}
-
-/// steamwebhelper.exe 进程数
-pub fn count_steamwebhelper() -> usize {
+fn is_process_running(name: &str) -> bool {
     let mut sys = System::new();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     sys.processes()
         .values()
-        .filter(|p| {
-            p.exe()
-                .and_then(|e| e.to_str())
-                .map(|e| normalize_path(e).ends_with("steamwebhelper.exe"))
-                .unwrap_or(false)
-        })
+        .any(|p| exe_matches(p.exe(), name))
+}
+
+fn count_processes(name: &str) -> usize {
+    let mut sys = System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    sys.processes()
+        .values()
+        .filter(|p| exe_matches(p.exe(), name))
         .count()
+}
+
+/// steam.exe 是否在运行
+pub fn is_steam_running() -> bool {
+    is_process_running("steam.exe")
+}
+
+/// dota2.exe 是否在运行
+pub fn is_dota_running() -> bool {
+    is_process_running("dota2.exe")
+}
+
+/// steamwebhelper.exe 进程数
+pub fn count_steamwebhelper() -> usize {
+    count_processes("steamwebhelper.exe")
 }
 
 /// 优雅关闭 Steam，等待完全退出
